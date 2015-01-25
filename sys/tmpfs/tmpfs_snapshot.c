@@ -480,13 +480,14 @@ tmpfs_snap_load_file(struct vnode *vp, uint64_t *off, tmpfs_mount_t *tmp,
 {
 	tmpfs_node_t *node = NULL;
 	uint64_t size;
-	int error;
+	int error, allocated = 0;
 
 	tmpfs_snap_find_node(tmp, tnhdr->tsn_id, &node);
 	if (node) {
 		if (node->tn_type != VREG)
 			return (EFTYPE);
 	} else {
+		allocated = 1;
 		error = tmpfs_snap_alloc_node(tmp, tnhdr, NULL, NODEV, &node);
 		if (error)
 			return (error);
@@ -495,7 +496,14 @@ tmpfs_snap_load_file(struct vnode *vp, uint64_t *off, tmpfs_mount_t *tmp,
 	if ((size = tnhdr->tsn_spec.tsn_size)) {
 		if ((error = tmpfs_snap_node_setsize(tmp, node, size)) ||
 		    (error = tmpfs_snap_file_io(vp, UIO_READ, node, off))) {
-			tmpfs_free_node(tmp, node);
+		    	/*
+			 * XXX don't free the node if we haven't allocated it,
+			 * since it might be attached to a directory, and we
+			 * will later step on a free'd node in
+			 * tmpfs_snap_load_cleanup().
+			 */
+		    	if (allocated)
+				tmpfs_free_node(tmp, node);
 			return (error);
 		}
 	}
