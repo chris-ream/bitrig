@@ -451,9 +451,10 @@ int
 tmpfs_snap_load_hdr(tmpfs_mount_t *tmp, tmpfs_node_t *node,
     tmpfs_snap_node_t *tnhdr, char *target, dev_t dev)
 {
-	int error;
+	int error, allocated = 0;
 
 	if (node == NULL) {
+		allocated = 1;
 		error = tmpfs_snap_alloc_node(tmp, tnhdr, target, dev, &node);
 		if (error)
 			return (error);
@@ -461,7 +462,14 @@ tmpfs_snap_load_hdr(tmpfs_mount_t *tmp, tmpfs_node_t *node,
 
 	error = tmpfs_snap_attach_node(tmp, tnhdr, node);
 	if (error) {
-		tmpfs_free_node(tmp, node);
+		/*
+		 * XXX don't free the node if we haven't allocated it,
+		 * since it might be attached to a directory, and we
+		 * will later step on a free'd node in
+		 * tmpfs_snap_load_cleanup().
+		 */
+		if (allocated)
+			tmpfs_free_node(tmp, node);
 		return (error);
 	}
 
